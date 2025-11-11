@@ -26,8 +26,9 @@ youtube-notifier/
 ├── state.json                  # 状态记录（自动生成）
 └── .github/
     └── workflows/
-        └── update-check.yml    # GitHub Actions 配置文件
+        └── update-check.yml    #GitHub Actions配置文件
 ---
+
 
 ## 创建方法（首次部署）
 
