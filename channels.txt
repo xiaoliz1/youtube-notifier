@@ -1,5 +1,4 @@
-# YouTube 频道ID，每行一个，支持 # 注释
-UC_x5XG1OV2P6uZZ5FSM9Ttw
-UCU1RaYhgjlaig3ydjJocINg
-UCs-QZ5410JVyyH9wTCsPOCw
+# YouTube 频道ID | 频道名称（可选，首次自动获取）
+UC_x5XG1OV2P6uZZ5FSM9Ttw | Google Developers
+UCU1RaYhgjlaig3ydjJocINg | 雨落倾城
 
