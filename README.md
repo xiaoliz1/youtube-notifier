@@ -18,7 +18,15 @@
 ---
 
 ## 目录结构
-youtube-notifier/ │ ├── main.py                     主程序 ├── channels.txt                频道ID列表（TXT格式） ├── state.json                  状态记录（自动生成） └── .github/ └── workflows/ └── update-check.yml    GitHub Actions 配置文件
+
+```plaintext
+youtube-notifier/
+├── main.py                     # 主程序
+├── channels.txt                # 频道ID列表（TXT格式）
+├── state.json                  # 状态记录（自动生成）
+└── .github/
+    └── workflows/
+        └── update-check.yml    # GitHub Actions 配置文件
 ---
 
 ## 创建方法（首次部署）
