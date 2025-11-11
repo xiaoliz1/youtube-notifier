@@ -62,29 +62,32 @@ def get_latest_videos(channel_id):
         return []
 
     videos = []
-    for entry in feed.entries[:5]:
+    for entry in feed.entries[:5]:  # 只取最新5条防漏
         video = {
             'title': entry.title,
             'link': entry.link,
             'video_id': entry.yt_videoid,
             'description': entry.get('media_description', '') or entry.get('summary', ''),
             'thumbnail': entry.media_thumbnail[0]['url'] if entry.get('media_thumbnail') else '',
-            'published': entry.published
+            'published': entry.published  # ISO-8601 格式
         }
         videos.append(video)
     return videos
 
 # ==================== 时间解析 ====================
 def parse_iso_time(iso_str):
+    """将 ISO-8601 时间转为时间戳（UTC）"""
     try:
+        # 处理带时区的情况
         dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
         return dt.timestamp()
-    except:
+    except Exception:
+        # 备用方案：尝试 RFC-822
         try:
             return time.mktime(time.strptime(iso_str, "%a, %d %b %Y %H:%M:%S %Z"))
         except Exception as e:
             print(f"时间解析失败: {iso_str} - {e}")
-            return 0
+            return 0  # 默认0，避免崩溃
 
 # ==================== Telegram通知 ====================
 def send_telegram_notification(video):
@@ -133,33 +136,25 @@ def check_updates():
 
         latest = videos[0]
         last_id = state.get(channel_id, {}).get('last_video_id')
-        last_time = state.get(channel_id, {}).get('last_published')
-        current_time = parse_iso_time(latest['published'])
-
+        
+        # 修复：完全依赖 video_id 判断（唯一可靠），忽略时间（避免未来时间 bug）
         if latest['video_id'] != last_id:
-            if last_time:
-                last_timestamp = parse_iso_time(last_time)
-                if current_time > last_timestamp:
-                    send_telegram_notification(latest)
-                    state[channel_id] = {
-                        'last_video_id': latest['video_id'],
-                        'last_published': latest['published']
-                    }
-                    updated = True
-            else:
-                send_telegram_notification(latest)
-                state[channel_id] = {
-                    'last_video_id': latest['video_id'],
-                    'last_published': latest['published']
-                }
-                updated = True
+            print(f"检测到新视频: {latest['title']} (ID: {latest['video_id']})")
+            send_telegram_notification(latest)
+            state[channel_id] = {
+                'last_video_id': latest['video_id'],
+                'last_published': latest['published']
+            }
+            updated = True
+        else:
+            print(f"频道 {channel_id} 无新视频 (最新 ID: {last_id})")
 
     if updated:
         save_state(state)
     else:
-        print("无新视频更新")
+        print("所有频道无新视频更新")
 
-# ==================== 入口 ====================
+# ==================== CLI 入口 ====================
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == '--check-id' and len(sys.argv) > 2:
         check_channel_id(sys.argv[2])
