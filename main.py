@@ -3,7 +3,6 @@ import requests
 import json
 import os
 import sys
-import io
 
 # ==================== 配置 ====================
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
@@ -11,9 +10,6 @@ TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
 STATE_FILE = 'state.json'
 CHANNELS_FILE = 'channels.txt'
-
-# 1x1 透明像素（作为 document）
-TRANSPARENT_PNG = io.BytesIO(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n\x2d\x1b\x00\x00\x00\x00IEND\xaeB`\x82')
 
 # ==================== 加载频道 ====================
 def load_channels():
@@ -85,53 +81,44 @@ def get_latest_videos(channel_id):
         print(f"[错误] 获取视频失败: {e}")
         return []
 
-# ==================== Telegram 通知：点击封面直接看视频 ====================
+# ==================== Telegram 通知：你指定的样式 ====================
 def send_telegram_notification(video, channel_name):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        return
-
-    # 下载封面图
-    try:
-        img_resp = requests.get(video['thumb_url'], timeout=10)
-        if img_resp.status_code != 200:
-            return
-        thumb_file = io.BytesIO(img_resp.content)
-        thumb_file.name = "thumb.jpg"
-    except:
         return
 
     # 简介 100 字
     desc = video['description']
     short_desc = (desc[:100] + '…') if len(desc) > 100 else desc
 
+    # 严格按你指定的顺序
     message = (
-        f"*新视频更新！*\n"
         f"**频道**：{channel_name}\n\n"
         f"**标题**：{video['title']}\n"
-        f"**时间**：{video['published']}\n"
-        f"**简介**：{short_desc}"
+        f"**简介**：{short_desc}\n"
+        f"**时间**：{video['published']}"
     )
 
-    # 使用 multipart/form-data 发送
-    files = {
-        'thumb': ('thumb.jpg', thumb_file, 'image/jpeg'),
-        'document': ('pixel.png', TRANSPARENT_PNG, 'image/png')
-    }
-    data = {
+    # 使用 sendMediaGroup 实现点击封面跳转
+    media = [{
+        "type": "photo",
+        "media": video['thumb_url'],
+        "caption": message,
+        "parse_mode": "Markdown"
+    }]
+
+    payload = {
         'chat_id': TELEGRAM_CHAT_ID,
-        'caption': message,
-        'parse_mode': 'Markdown'
+        'media': json.dumps(media)
     }
 
     try:
         r = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument",
-            data=data,
-            files=files,
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMediaGroup",
+            data=payload,
             timeout=15
         )
         if r.status_code == 200:
-            print(f"[成功] 已发送（点击封面观看）: {video['title'][:30]}")
+            print(f"[成功] 已发送: {video['title'][:30]}")
         else:
             print(f"[失败] {r.status_code}")
     except Exception as e:
