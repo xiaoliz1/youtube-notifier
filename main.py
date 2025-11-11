@@ -81,7 +81,7 @@ def get_latest_videos(channel_id):
         print(f"[错误] 获取视频失败: {e}")
         return []
 
-# ==================== Telegram 通知：你指定的样式 ====================
+# ==================== Telegram 通知：点击标题跳转 ====================
 def send_telegram_notification(video, channel_name):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         return
@@ -90,35 +90,32 @@ def send_telegram_notification(video, channel_name):
     desc = video['description']
     short_desc = (desc[:100] + '…') if len(desc) > 100 else desc
 
-    # 严格按你指定的顺序
+    # Markdown 链接：标题可点击
+    title_link = f"[{video['title']}]({video['link']})"
+
     message = (
         f"**频道**：{channel_name}\n\n"
-        f"**标题**：{video['title']}\n"
+        f"{title_link}\n"
         f"**简介**：{short_desc}\n"
         f"**时间**：{video['published']}"
     )
 
-    # 使用 sendMediaGroup 实现点击封面跳转
-    media = [{
-        "type": "photo",
-        "media": video['thumb_url'],
-        "caption": message,
-        "parse_mode": "Markdown"
-    }]
-
+    # 使用 sendPhoto：封面图显示（不可点），标题可点
     payload = {
         'chat_id': TELEGRAM_CHAT_ID,
-        'media': json.dumps(media)
+        'photo': video['thumb_url'],
+        'caption': message,
+        'parse_mode': 'Markdown'
     }
 
     try:
         r = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMediaGroup",
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
             data=payload,
             timeout=15
         )
         if r.status_code == 200:
-            print(f"[成功] 已发送: {video['title'][:30]}")
+            print(f"[成功] 已发送（点击标题播放）: {video['title'][:30]}")
         else:
             print(f"[失败] {r.status_code}")
     except Exception as e:
