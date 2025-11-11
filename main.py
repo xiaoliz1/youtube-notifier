@@ -93,31 +93,34 @@ def get_latest_videos(channel_id):
         feed = feedparser.parse(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
         if feed.bozo:
             print(f"[RSS失败] 频道 {channel_id} 解析错误: {getattr(feed, 'bozo_exception', '未知')}")
-            return []
+            return None
         if not feed.entries:
             print(f"[无视频] 频道 {channel_id} RSS 为空")
-            return []
+            return None
         
         e = feed.entries[0]
         title = e.title.strip() if e.title else "(无标题)"
         thumb_url = e.media_thumbnail[0]['url'] if e.get('media_thumbnail') else None
-        if not thumb_url:
-            print(f"[无封面] 频道 {channel_id} 视频无缩略图")
-            return []
+        desc = e.get('media_description', '') or e.get('summary', '')
+        pub = e.published
         
         print(f"[最新] 视频标题: {title}")
         print(f"[最新] 视频ID: {e.yt_videoid}")
-        return [{
+        print(f"[最新] 缩略图: {thumb_url or '无'}")
+        print(f"[最新] 简介长度: {len(desc)} 字")
+        print(f"[最新] 发布时间: {pub}")
+        
+        return {
             'title': title,
             'link': e.link,
             'video_id': e.yt_videoid,
-            'description': e.get('media_description', '') or e.get('summary', ''),
+            'description': desc,
             'thumb_url': thumb_url,
-            'published': e.published
-        }]
+            'published': pub
+        }
     except Exception as e:
         print(f"[网络错误] 获取 {channel_id} 视频失败: {e}")
-        return []
+        return None
 
 # ==================== Telegram 通知（点击标题播放） ====================
 def send_telegram_notification(video, channel_name):
@@ -136,20 +139,26 @@ def send_telegram_notification(video, channel_name):
         f"**时间**：{video['published']}"
     )
 
-    payload = {
-        'chat_id': TELEGRAM_CHAT_ID,
-        'photo': video['thumb_url'],
-        'caption': message,
-        'parse_mode': 'Markdown'
-    }
+    # 有封面 → sendPhoto；无封面 → sendMessage
+    if video['thumb_url']:
+        payload = {
+            'chat_id': TELEGRAM_CHAT_ID,
+            'photo': video['thumb_url'],
+            'caption': message,
+            'parse_mode': 'Markdown'
+        }
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
+    else:
+        payload = {
+            'chat_id': TELEGRAM_CHAT_ID,
+            'text': message,
+            'parse_mode': 'Markdown'
+        }
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
     try:
         print(f"[通知] 正在发送通知...")
-        r = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
-            data=payload,
-            timeout=15
-        )
+        r = requests.post(url, data=payload, timeout=15)
         if r.status_code == 200:
             print(f"[成功] 通知已发送")
         else:
@@ -178,18 +187,17 @@ def check_updates():
         print(f"[检查 {idx}/{len(channels)}] 频道: {cid} ({name})")
         print(f"{'-'*50}")
 
-        videos = get_latest_videos(cid)
-        if not videos:
+        video = get_latest_videos(cid)
+        if video is None:
             print(f"[跳过] 无新视频或获取失败")
             continue
 
-        latest = videos[0]
         last_id = state[cid].get('last_video_id')
 
-        if latest['video_id'] != last_id:
-            print(f"[新视频] 发现更新！ID: {latest['video_id']}")
-            send_telegram_notification(latest, name)
-            state[cid]['last_video_id'] = latest['video_id']
+        if video['video_id'] != last_id:
+            print(f"[新视频] 发现更新！ID: {video['video_id']}")
+            send_telegram_notification(video, name)
+            state[cid]['last_video_id'] = video['video_id']
             total_updated += 1
         else:
             print(f"[无更新] 最新视频已通知")
@@ -201,7 +209,7 @@ def check_updates():
     else:
         print(f"[完成] 所有频道无新视频")
     print(f"{'='*60}\n")
- 
+
 # ==================== 入口 ====================
 if __name__ == "__main__":
     check_updates()
