@@ -46,7 +46,7 @@ youtube-notifier/
 https://api.telegram.org/bot<你的TOKEN>/getUpdates
 找到 "chat":{"id":123456789} → 123456789 就是你的 Chat ID
 3. 添加文件到仓库
-文件 1：main.py
+main.py（主程序）
 import feedparser
 import requests
 import json
@@ -60,19 +60,18 @@ TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
 STATE_FILE = 'state.json'
-CHANNELS_FILE = 'channels.txt'  # TXT格式，每行一个ID
+CHANNELS_FILE = 'channels.txt'
 
 # ==================== 加载频道ID ====================
 def load_channels():
     if not os.path.exists(CHANNELS_FILE):
         print(f"警告: {CHANNELS_FILE} 不存在，使用空列表。")
         return []
-    
     channel_ids = []
     with open(CHANNELS_FILE, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
-            if line and not line.startswith('#'):  # 忽略空行和注释
+            if line and not line.startswith('#'):
                 channel_ids.append(line)
     return channel_ids
 
@@ -109,7 +108,6 @@ def get_latest_videos(channel_id):
     if feed.bozo:
         print(f"无法获取频道 {channel_id} 的RSS")
         return []
-
     videos = []
     for entry in feed.entries[:5]:
         video = {
@@ -140,7 +138,6 @@ def send_telegram_notification(video):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print("Telegram 配置缺失，跳过通知")
         return
-
     message = (
         f"*新视频更新！*\n\n"
         f"**标题**：{video['title']}\n"
@@ -148,7 +145,6 @@ def send_telegram_notification(video):
         f"**简介**：{video['description'][:300]}{'...' if len(video['description']) > 300 else ''}\n"
         f"[观看视频]({video['link']})"
     )
-
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
     payload = {
         'chat_id': TELEGRAM_CHAT_ID,
@@ -171,20 +167,16 @@ def check_updates():
     if not channel_ids:
         print("无频道ID配置，退出。")
         return
-
     state = load_state(channel_ids)
     updated = False
-
     for channel_id in channel_ids:
         videos = get_latest_videos(channel_id)
         if not videos:
             continue
-
         latest = videos[0]
         last_id = state.get(channel_id, {}).get('last_video_id')
         last_time = state.get(channel_id, {}).get('last_published')
         current_time = parse_iso_time(latest['published'])
-
         if latest['video_id'] != last_id:
             if last_time:
                 last_timestamp = parse_iso_time(last_time)
@@ -202,7 +194,6 @@ def check_updates():
                     'last_published': latest['published']
                 }
                 updated = True
-
     if updated:
         save_state(state)
     else:
@@ -214,13 +205,13 @@ if __name__ == "__main__":
         check_channel_id(sys.argv[2])
     else:
         check_updates()
-文件 2：channels.txt
+channels.txt（频道列表）
 # YouTube 频道ID，每行一个，支持 # 注释
 UC_x5XG1OV2P6uZZ5FSM9Ttw
 # UC_another_channel_id_here
-文件 3：state.json
+state.json（初始状态）
 {}
-文件 4：.github/workflows/update-check.yml
+.github/workflows/update-check.yml
 name: Check YouTube Updates
 
 on:
@@ -267,84 +258,44 @@ jobs:
             git commit -m "Update state: $(date -u +'%Y-%m-%d %H:%M UTC')"
             git push
           fi
-4. 设置 Secrets（环境变量）
-进入仓库 → Settings → Secrets and variables → Actions
-点击 New repository secret，添加两个：
+4. 设置 Secrets
 Name
 Value
 TELEGRAM_TOKEN
 你的 Bot Token
 TELEGRAM_CHAT_ID
 你的 Chat ID（数字）
-5. 提交所有文件
+5. 提交代码
 git add .
 git commit -m "feat: initial YouTube notifier"
 git push
 修改方法
-1. 修改运行时间（香港时间）
-编辑 .github/workflows/update-check.yml 中的 cron：
+修改运行时间（香港时间 HKT）
 on:
   schedule:
-    - cron: '0 1 * * *'  # 香港时间 09:00
+    - cron: '0 1 * * *'  # 每天 09:00 HKT
 需求
-cron 表达式
-说明
-每天 HKT 09:00
+cron
+每天 09:00
 0 1 * * *
-推荐
 每 2 小时
 0 */2 * * *
-
 每 30 分钟
 */30 * * * *
-
-工作日 HKT 09:00
-0 1 * * 1-5
-周一至周五
-使用 crontab.guru 验证时间
-2. 添加/删除频道
+添加频道
 编辑 channels.txt：
 UC_x5XG1OV2P6uZZ5FSM9Ttw
-UC_9k7iRj...
-# UC_disabled_channel  # 注释掉即禁用
-修改后 提交 push 即可生效
-3. 手动运行（立即检查）
-进入 GitHub 仓库 → Actions
-选择 Check YouTube Updates
-点击右侧 Run workflow → Run workflow
-4. 查看运行日志
-Actions → 选择最近一次运行 → 点击 job → 查看输出
-成功时会看到：
-通知已发送: XXX
-Update state: 2025-11-11 01:00 UTC
-5. 检测频道ID是否正确（本地）
-python main.py --check-id UC_x5XG1OV2P6uZZ5FSM9Ttw
-输出：
-频道ID UC_x5XG1OV2P6uZZ5FSM9Ttw 有效 → Google Developers
+UC_new_channel_id
+手动运行
+GitHub → Actions → Run workflow
 常见问题
 问题
 解决方案
-没有收到通知
-检查 Secrets 是否正确、Bot 是否被拉黑
+无通知
+检查 Secrets、Bot 是否被拉黑
 git push 403
-确认 permissions: contents: write 在 on 之后
+确认 permissions: contents: write
 时间不对
-所有时间基于 UTC，香港时间 = UTC+8
-频道ID无效
-使用 --check-id 验证，或在 YouTube 频道页面查看 URL
-安全提示
-不要公开 TELEGRAM_TOKEN
-建议仓库设为 Private
-state.json 包含历史记录，可定期清理
-维护者信息
-作者：Grok + 你
-更新时间：2025年11月11日
-支持：如有问题，提交 Issue 或联系维护者
-恭喜！你的 YouTube 更新通知机器人已成功部署！
-现在，你只需编辑 channels.txt 添加频道，机器人就会自动在 每天香港时间 9:00 为你推送新视频！
-**已修复**：  
-- 目录结构使用 `plaintext` 代码块，确保在 GitHub、VS Code、Typora 等所有平台 **完美对齐显示**  
-- 一键复制 → 粘贴 → 保存为 `README.md` 即可
-
-**现在复制整个代码块，粘贴到仓库根目录，命名为 `README.md`**  
-你的项目文档立即变得专业、美观、清晰！
+HKT = UTC+8
+恭喜！你的 YouTube 通知机器人已就绪！
+现在只需编辑 channels.txt，每天 HKT 09:00 自动推送新视频！
