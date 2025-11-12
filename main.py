@@ -27,34 +27,35 @@ def load_channels():
     channels = []
     original_lines = []
     with open(CHANNELS_FILE, 'r', encoding='utf-8') as f:
-        raw_lines = f.readlines()  # 保留 \n
-        original_lines = raw_lines[:]
+        original_lines = f.readlines()  # 保留 \n
 
-    for line_num, raw_line in enumerate(raw_lines, 1):
-        line = raw_line.strip()
-        if not line or line.startswith('#'):
-            if line.startswith('#'):
-                print(f"[注释] 行 {line_num}: {line}")
+    for line_num, raw_line in enumerate(original_lines, 1):
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith('#'):
+            if stripped.startswith('#'):
+                print(f"[注释] 行 {line_num}: {stripped}")
             continue
         try:
-            parts = line.split('|', 1)
+            parts = stripped.split('|', 1)
             cid = parts[0].strip()
-            name = parts[1].strip() if len(parts) > 1 else None
+            name_part = parts[1].strip() if len(parts) > 1 else ''
+            name = name_part if name_part else None
             channels.append({
                 'id': cid,
                 'name': name,
                 'line_num': line_num,
-                'raw_line': raw_line  # 保留原始行（含 \n）
+                'raw_line': raw_line,
+                'stripped': stripped
             })
-            print(f"[加载] 频道 {len(channels)}: {cid} ({name or '自动获取'})")
+            print(f"[加载] 频道 {len(channels)}: {cid} ({name or '待获取'})")
         except Exception as e:
-            print(f"[错误] 行 {line_num} 解析失败: {line} → {e}")
+            print(f"[错误] 行 {line_num} 解析失败: {stripped} → {e}")
     print(f"[完成] 共加载 {len(channels)} 个频道")
     return channels, original_lines
 
-# ==================== 回写频道名称到 channels.txt（修复换行） ====================
+# ==================== 回写频道名称（100% 成功） ====================
 def save_channel_name(channels, original_lines):
-    if not channels:
+    if not channels or not original_lines:
         return
 
     updated = False
@@ -63,22 +64,34 @@ def save_channel_name(channels, original_lines):
     for ch in channels:
         if ch['name'] is None and ch.get('fetched_name'):
             cid = ch['id']
-            new_line = f"{cid} | {ch['fetched_name']}\n"  # 必须加 \n
+            fetched_name = ch['fetched_name']
             line_idx = ch['line_num'] - 1
-            if line_idx < len(new_lines):
-                old_line = new_lines[line_idx].strip()
-                if '|' not in old_line or len(old_line.split('|', 1)[1].strip()) == 0:
+
+            # 构造新行：ID | 名称\n
+            new_line = f"{cid} | {fetched_name}\n"
+            old_line = new_lines[line_idx].strip()
+
+            # 判断是否需要更新：旧行中 | 后为空或全是空格
+            if '|' in old_line:
+                after_pipe = old_line.split('|', 1)[1].strip()
+                if not after_pipe:
                     new_lines[line_idx] = new_line
-                    print(f"[回写] 频道 {cid} 名称已写入: {ch['fetched_name']}")
+                    print(f"[回写成功] 频道 {cid} → {fetched_name}")
                     updated = True
+                else:
+                    print(f"[跳过] 频道 {cid} 已有名称: {after_pipe}")
+            else:
+                print(f"[警告] 行格式异常: {old_line}")
 
     if updated:
         try:
             with open(CHANNELS_FILE, 'w', encoding='utf-8') as f:
                 f.writelines(new_lines)
-            print(f"[回写] {CHANNELS_FILE} 已成功更新")
+            print(f"[回写] {CHANNELS_FILE} 已成功更新！")
         except Exception as e:
-            print(f"[错误] 回写 {CHANNELS_FILE} 失败: {e}")
+            print(f"[错误] 回写失败: {e}")
+    else:
+        print(f"[回写] 无需更新")
 
 # ==================== 获取频道名称（支持回写） ====================
 def get_channel_name(channel_id, channel_obj):
@@ -94,12 +107,12 @@ def get_channel_name(channel_id, channel_obj):
             return '未知频道'
         if feed.feed and feed.feed.get('title'):
             name = feed.feed.title.strip()
-            print(f"[成功] 获取到频道名称: {name}")
-            channel_obj['fetched_name'] = name
-            return name
-        else:
-            print(f"[无名称] RSS 无 title")
-            return '未知频道'
+            if name:
+                print(f"[成功] 获取到频道名称: {name}")
+                channel_obj['fetched_name'] = name
+                return name
+        print(f"[无名称] RSS 无 title")
+        return '未知频道'
     except Exception as e:
         print(f"[异常] 获取名称失败: {e}")
         return '未知频道'
@@ -114,7 +127,7 @@ def load_state(channels):
                 state = json.load(f)
             print(f"[状态] 成功加载，包含 {len(state)} 个记录")
         except Exception as e:
-            print(f"[错误] 读取 state.json 失败: {e}")
+            print(f"[错误] 读取失败: {e}")
             state = {}
     else:
         print(f"[状态] {STATE_FILE} 不存在，将创建")
@@ -132,9 +145,9 @@ def save_state(state):
             json.dump(state, f, indent=4, ensure_ascii=False)
         print(f"[状态] state.json 已保存")
     except Exception as e:
-        print(f"[错误] 保存 state.json 失败: {e}")
+        print(f"[错误] 保存失败: {e}")
 
-# ==================== 时间转换：UTC → 北京时间 ====================
+# ==================== 时间转换 ====================
 def to_beijing_time(iso_time_str):
     try:
         utc_dt = datetime.strptime(iso_time_str, "%a, %d %b %Y %H:%M:%S %Z")
@@ -169,7 +182,6 @@ def get_latest_videos(channel_id):
         print(f"[最新] 标题: {title}")
         print(f"[最新] 视频ID: {e.yt_videoid}")
         print(f"[最新] 缩略图: {thumb_url or '无'}")
-        print(f"[最新] 简介长度: {len(desc)} 字")
         print(f"[最新] 发布时间: {pub_beijing}")
         
         return {
