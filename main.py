@@ -27,7 +27,7 @@ def load_channels():
     channels = []
     original_lines = []
     with open(CHANNELS_FILE, 'r', encoding='utf-8') as f:
-        original_lines = f.readlines()  # 保留 \n
+        original_lines = f.readlines()
 
     for line_num, raw_line in enumerate(original_lines, 1):
         stripped = raw_line.strip()
@@ -53,71 +53,7 @@ def load_channels():
     print(f"[完成] 共加载 {len(channels)} 个频道")
     return channels, original_lines
 
-# ==================== 回写频道名称（100% 成功） ====================
-def save_channel_name(channels, original_lines):
-    if not channels or not original_lines:
-        return
-
-    updated = False
-    new_lines = original_lines[:]
-
-    for ch in channels:
-        if ch['name'] is None and ch.get('fetched_name'):
-            cid = ch['id']
-            fetched_name = ch['fetched_name']
-            line_idx = ch['line_num'] - 1
-
-            # 构造新行：ID | 名称\n
-            new_line = f"{cid} | {fetched_name}\n"
-            old_line = new_lines[line_idx].strip()
-
-            # 判断是否需要更新：旧行中 | 后为空或全是空格
-            if '|' in old_line:
-                after_pipe = old_line.split('|', 1)[1].strip()
-                if not after_pipe:
-                    new_lines[line_idx] = new_line
-                    print(f"[回写成功] 频道 {cid} → {fetched_name}")
-                    updated = True
-                else:
-                    print(f"[跳过] 频道 {cid} 已有名称: {after_pipe}")
-            else:
-                print(f"[警告] 行格式异常: {old_line}")
-
-    if updated:
-        try:
-            with open(CHANNELS_FILE, 'w', encoding='utf-8') as f:
-                f.writelines(new_lines)
-            print(f"[回写] {CHANNELS_FILE} 已成功更新！")
-        except Exception as e:
-            print(f"[错误] 回写失败: {e}")
-    else:
-        print(f"[回写] 无需更新")
-
-# ==================== 获取频道名称（支持回写） ====================
-def get_channel_name(channel_id, channel_obj):
-    if channel_obj['name']:
-        print(f"[缓存] 使用已有名称: {channel_obj['name']}")
-        return channel_obj['name']
-    
-    try:
-        print(f"[RSS] 正在获取频道名称: {channel_id}")
-        feed = feedparser.parse(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
-        if feed.bozo:
-            print(f"[RSS失败] 解析错误: {getattr(feed, 'bozo_exception', '未知')}")
-            return '未知频道'
-        if feed.feed and feed.feed.get('title'):
-            name = feed.feed.title.strip()
-            if name:
-                print(f"[成功] 获取到频道名称: {name}")
-                channel_obj['fetched_name'] = name
-                return name
-        print(f"[无名称] RSS 无 title")
-        return '未知频道'
-    except Exception as e:
-        print(f"[异常] 获取名称失败: {e}")
-        return '未知频道'
-
-# ==================== 状态管理 ====================
+# ==================== 加载/更新 state.json（包含频道名称） ====================
 def load_state(channels):
     print(f"[状态] 正在加载 {STATE_FILE}...")
     state = {}
@@ -127,25 +63,108 @@ def load_state(channels):
                 state = json.load(f)
             print(f"[状态] 成功加载，包含 {len(state)} 个记录")
         except Exception as e:
-            print(f"[错误] 读取失败: {e}")
+            print(f"[错误] 读取 state.json 失败: {e} → 使用空状态")
             state = {}
     else:
-        print(f"[状态] {STATE_FILE} 不存在，将创建")
-    
+        print(f"[状态] {STATE_FILE} 不存在，将创建新文件")
+
+    # 确保每个频道都有状态
     for ch in channels:
         cid = ch['id']
         if cid not in state:
-            state[cid] = {'last_video_id': None}
+            state[cid] = {
+                'last_video_id': None,
+                'channel_name': None  # 预留名称字段
+            }
             print(f"[初始化] 频道 {cid} 状态")
+        # 如果 state 中已有名称，优先使用
+        if state[cid].get('channel_name') and not ch['name']:
+            ch['name'] = state[cid]['channel_name']
+            print(f"[缓存] 从 state.json 恢复名称: {ch['name']}")
+
     return state
 
 def save_state(state):
     try:
         with open(STATE_FILE, 'w', encoding='utf-8') as f:
             json.dump(state, f, indent=4, ensure_ascii=False)
-        print(f"[状态] state.json 已保存")
+        print(f"[状态] state.json 已保存（含频道名称）")
     except Exception as e:
-        print(f"[错误] 保存失败: {e}")
+        print(f"[错误] 保存 state.json 失败: {e}")
+
+# ==================== 回写频道名称到 channels.txt ====================
+def save_channel_name_to_file(channels, original_lines):
+    if not channels or not original_lines:
+        return False
+
+    updated = False
+    new_lines = original_lines[:]
+
+    for ch in channels:
+        if ch['name'] is None and ch.get('fetched_name'):
+            cid = ch['id']
+            fetched_name = ch['fetched_name']
+            line_idx = ch['line_num'] - 1
+            new_line = f"{cid} | {fetched_name}\n"
+            old_line = new_lines[line_idx].strip()
+
+            if '|' in old_line:
+                after_pipe = old_line.split('|', 1)[1].strip()
+                if not after_pipe:
+                    new_lines[line_idx] = new_line
+                    print(f"[文件回写] {cid} → {fetched_name}")
+                    updated = True
+
+    if updated:
+        try:
+            with open(CHANNELS_FILE, 'w', encoding='utf-8') as f:
+                f.writelines(new_lines)
+            print(f"[文件] {CHANNELS_FILE} 已更新")
+            return True
+        except Exception as e:
+            print(f"[错误] 文件回写失败: {e}")
+    return updated
+
+# ==================== 获取频道名称（支持双重回写） ====================
+def get_channel_name(channel_id, channel_obj, state):
+    cid = channel_id
+    # 优先：channels.txt 已填
+    if channel_obj['name']:
+        print(f"[缓存] 使用 channels.txt 名称: {channel_obj['name']}")
+        # 同步到 state
+        if state[cid].get('channel_name') != channel_obj['name']:
+            state[cid]['channel_name'] = channel_obj['name']
+        return channel_obj['name']
+
+    # 次优先：state.json 有缓存
+    if state[cid].get('channel_name'):
+        name = state[cid]['channel_name']
+        print(f"[缓存] 使用 state.json 名称: {name}")
+        channel_obj['name'] = name
+        return name
+
+    # 最后：RSS 获取
+    try:
+        print(f"[RSS] 正在获取频道名称: {cid}")
+        feed = feedparser.parse(f"https://www.youtube.com/feeds/videos.xml?channel_id={cid}")
+        if feed.bozo:
+            print(f"[RSS失败] 解析错误: {getattr(feed, 'bozo_exception', '未知')}")
+            return '未知频道'
+        if feed.feed and feed.feed.get('title'):
+            name = feed.feed.title.strip()
+            if name:
+                print(f"[成功] 获取到名称: {name}")
+                # 写入 state.json
+                state[cid]['channel_name'] = name
+                # 标记用于文件回写
+                channel_obj['fetched_name'] = name
+                channel_obj['name'] = name
+                return name
+        print(f"[无名称] RSS 无 title")
+        return '未知频道'
+    except Exception as e:
+        print(f"[异常] 获取名称失败: {e}")
+        return '未知频道'
 
 # ==================== 时间转换 ====================
 def to_beijing_time(iso_time_str):
@@ -181,7 +200,6 @@ def get_latest_videos(channel_id):
         
         print(f"[最新] 标题: {title}")
         print(f"[最新] 视频ID: {e.yt_videoid}")
-        print(f"[最新] 缩略图: {thumb_url or '无'}")
         print(f"[最新] 发布时间: {pub_beijing}")
         
         return {
@@ -257,6 +275,7 @@ def check_updates():
 
     state = load_state(channels)
     total_updated = 0
+    file_updated = False
 
     for idx, ch in enumerate(channels, 1):
         cid = ch['id']
@@ -264,8 +283,8 @@ def check_updates():
         print(f"  [频道 {idx}/{len(channels)}] 日志开始 - ID: {cid}")
         print(f"{'='*60}")
 
-        name = get_channel_name(cid, ch)
-        print(f"[频道] 名称: {name}")
+        name = get_channel_name(cid, ch, state)
+        print(f"[频道] 最终名称: {name}")
 
         video = get_latest_videos(cid)
         if video is None:
@@ -284,14 +303,16 @@ def check_updates():
         print(f"  [频道 {idx}/{len(channels)}] 日志结束")
         print(f"{'='*60}\n")
 
-    # 回写频道名称
-    save_channel_name(channels, original_lines)
+    # 回写文件
+    if save_channel_name_to_file(channels, original_lines):
+        file_updated = True
 
-    if total_updated > 0:
-        save_state(state)
-        print(f"[完成] 本次共 {total_updated} 个频道有更新")
-    else:
-        print(f"[完成] 所有频道无新视频")
+    # 始终保存 state（含名称）
+    save_state(state)
+
+    print(f"[完成] 本次共 {total_updated} 个频道有更新")
+    if file_updated:
+        print(f"[文件] channels.txt 已更新")
 
 # ==================== 入口 ====================
 if __name__ == "__main__":
