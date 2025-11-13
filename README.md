@@ -1,6 +1,3 @@
-以下是 README.md 完整说明文档（Markdown 格式）
-已 100% 适配最新代码
-适合 GitHub 仓库直接使用
 # YouTube 通知器（支持 Shorts + 自动回写）
 
 **每小时自动监控 YouTube 频道更新，推送至 Telegram，支持长视频 & Shorts，带封面、分行、点击直达！**
