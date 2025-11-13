@@ -20,16 +20,18 @@
 ---
 
 ## 仓库结构
-youtube-notifier/ ├── main.py                 # 主程序（完整代码） ├── requirements.txt        # Python 依赖 ├── channels.txt            # 频道列表（支持注释） ├── state.json              # 运行时状态（自动生成） └── .github/ └── workflows/ └── update-check.yml  # GitHub Actions 工作流
+youtube-notifier/ 
+├── main.py                 # 主程序（完整代码） ├── requirements.txt        # Python 依赖 
+├── channels.txt            # 频道列表（支持注释） 
+├── state.json              # 运行时状态（自动生成） └── .github/ 
+         └── workflows/ 
+              └── update-check.yml  # GitHub Actions 工作流
 ---
 
 ## 部署步骤（3 分钟完成）
 
-### 1. 克隆仓库
+1. 克隆仓库
 
-```bash
-git clone https://github.com/你的用户名/youtube-notifier.git
-cd youtube-notifier
 2. 配置 channels.txt
 
 格式：频道ID | 频道名称（名称可留空，自动填充）
@@ -52,8 +54,7 @@ TELEGRAM_CHAT_ID
 Token：找 @BotFather
 Chat ID：将 Bot 拉入群组，发消息后访问 https://api.telegram.org/bot<token>/getUpdates
 
-4. 提交代码
-工作流说明（.github/workflows/update-check.yml）
+4.工作流说明（.github/workflows/update-check.yml）
 on:
   schedule:
     - cron: '0 * * * *'  # 北京时间每小时整点
