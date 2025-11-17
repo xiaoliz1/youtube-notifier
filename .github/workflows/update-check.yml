@@ -1,4 +1,4 @@
-name: Check YouTube Updates
+name: YouTube更新通知程序
 
 on:
   schedule:
