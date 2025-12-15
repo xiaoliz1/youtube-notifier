@@ -63,7 +63,8 @@ youtube-notifier/
 on:
   schedule:
     - cron: '0 * * * *'  # 北京时间每小时整点
-  workflow_dispatch:     # 支持手动触发
+  workflow_dispatch:     # 支持手动触发  
+```
 
 # 自动清理：只保留最近 2 次运行记录（可修改）
 const keep = 2;
