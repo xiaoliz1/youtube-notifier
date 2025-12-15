@@ -20,14 +20,14 @@
 ---
 
 ## 仓库结构
-youtube-notifier/
-├── main.py # 主程序（完整代码）
-├── requirements.txt # Python 依赖
-├── channels.txt # 频道列表（支持注释）
-├── state.json # 运行时状态（自动生成）
-└── .github/
-└── workflows/
-└── update-check.yml # GitHub Actions工作流
+youtube-notifier/  
+├── main.py # 主程序（完整代码）  
+├── requirements.txt # Python 依赖  
+├── channels.txt # 频道列表（支持注释）  
+├── state.json # 运行时状态（自动生成）  
+└── .github/  
+└── workflows/  
+└── update-check.yml # GitHub Actions工作流  
 
 ---
 
