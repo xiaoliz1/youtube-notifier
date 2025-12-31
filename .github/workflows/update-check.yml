@@ -49,7 +49,7 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
-            const keep = 2;  // 修改这里即可控制保留数量
+            const keep = 12;  // 修改这里即可控制保留数量
             const workflowName = 'update-check.yml';
             
             const runs = await github.rest.actions.listWorkflowRunsForRepo({
